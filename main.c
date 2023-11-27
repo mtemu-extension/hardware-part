@@ -45,7 +45,6 @@ I2C_HandleTypeDef hi2c1;
 SPI_HandleTypeDef hspi1;
 
 UART_HandleTypeDef huart1;
-
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -235,37 +234,6 @@ static void MX_SPI1_Init(void) {
 }
 
 /**
- * @brief USART2 Initialization Function
- * @param None
- * @retval None
- */
-static void MX_USART2_UART_Init(void) {
-
-	/* USER CODE BEGIN USART2_Init 0 */
-
-	/* USER CODE END USART2_Init 0 */
-
-	/* USER CODE BEGIN USART2_Init 1 */
-
-	/* USER CODE END USART2_Init 1 */
-	huart2.Instance = USART2;
-	huart2.Init.BaudRate = 115200;
-	huart2.Init.WordLength = UART_WORDLENGTH_8B;
-	huart2.Init.StopBits = UART_STOPBITS_1;
-	huart2.Init.Parity = UART_PARITY_NONE;
-	huart2.Init.Mode = UART_MODE_TX_RX;
-	huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-	huart2.Init.OverSampling = UART_OVERSAMPLING_16;
-	if (HAL_UART_Init(&huart2) != HAL_OK) {
-		Error_Handler();
-	}
-	/* USER CODE BEGIN USART2_Init 2 */
-
-	/* USER CODE END USART2_Init 2 */
-
-}
-
-/**
  * @brief USART1 Initialization Function
  * @param None
  * @retval None
@@ -297,19 +265,76 @@ static void MX_USART1_UART_Init(void) {
 }
 
 /**
+ * @brief USART2 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_USART2_UART_Init(void) {
+
+	/* USER CODE BEGIN USART2_Init 0 */
+
+	/* USER CODE END USART2_Init 0 */
+
+	/* USER CODE BEGIN USART2_Init 1 */
+
+	/* USER CODE END USART2_Init 1 */
+	huart2.Instance = USART2;
+	huart2.Init.BaudRate = 115200;
+	huart2.Init.WordLength = UART_WORDLENGTH_8B;
+	huart2.Init.StopBits = UART_STOPBITS_1;
+	huart2.Init.Parity = UART_PARITY_NONE;
+	huart2.Init.Mode = UART_MODE_TX_RX;
+	huart2.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+	huart2.Init.OverSampling = UART_OVERSAMPLING_16;
+	if (HAL_UART_Init(&huart2) != HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN USART2_Init 2 */
+
+	/* USER CODE END USART2_Init 2 */
+
+}
+
+/**
  * @brief GPIO Initialization Function
  * @param None
  * @retval None
  */
 static void MX_GPIO_Init(void) {
+	GPIO_InitTypeDef GPIO_InitStruct = { 0 };
 	/* USER CODE BEGIN MX_GPIO_Init_1 */
 	/* USER CODE END MX_GPIO_Init_1 */
 
 	/* GPIO Ports Clock Enable */
+	__HAL_RCC_GPIOB_CLK_ENABLE();
+	__HAL_RCC_GPIOD_CLK_ENABLE();
+	__HAL_RCC_GPIOA_CLK_ENABLE();
 	__HAL_RCC_GPIOC_CLK_ENABLE();
 	__HAL_RCC_GPIOH_CLK_ENABLE();
-	__HAL_RCC_GPIOA_CLK_ENABLE();
-	__HAL_RCC_GPIOB_CLK_ENABLE();
+	__HAL_RCC_GPIOE_CLK_ENABLE();
+
+	/*Configure GPIO pin Output Level */
+	HAL_GPIO_WritePin(GPIOE,
+			GPIO_PIN_8 | GPIO_PIN_10 | GPIO_PIN_12 | GPIO_PIN_7 | GPIO_PIN_9
+					| GPIO_PIN_11 | GPIO_PIN_13 | GPIO_PIN_14, GPIO_PIN_RESET);
+
+	/*Configure GPIO pins : GPIO_IN2_Pin GPIO_IN5_Pin GPIO_IN0_Pin GPIO_IN3_Pin
+	 GPIO_IN6_Pin GPIO_IN1_Pin GPIO_IN4_Pin GPIO_IN7_Pin */
+	GPIO_InitStruct.Pin = GPIO_IN2_Pin | GPIO_IN5_Pin | GPIO_IN0_Pin
+			| GPIO_IN3_Pin | GPIO_IN6_Pin | GPIO_IN1_Pin | GPIO_IN4_Pin
+			| GPIO_IN7_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+	/*Configure GPIO pins : PE8 PE10 PE12 PE7
+	 PE9 PE11 PE13 PE14 */
+	GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_10 | GPIO_PIN_12 | GPIO_PIN_7
+			| GPIO_PIN_9 | GPIO_PIN_11 | GPIO_PIN_13 | GPIO_PIN_14;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
 
 	/* USER CODE BEGIN MX_GPIO_Init_2 */
 	/* USER CODE END MX_GPIO_Init_2 */
@@ -341,22 +366,59 @@ AVAILABLE_INTERFACES GetInterfaceByPort(const uint8_t port) {
 void SendRequestToInterface(AVAILABLE_INTERFACES interface, uint8_t data) {
 	switch (interface) {
 	case INTERFACE_UART:
+		// Отправить данные по интерфейсу юарт
 		HAL_UART_Transmit(&huart1, &data, 1, HAL_MAX_DELAY);
+
+		// Прервать асинхронных прием данных, так как была дана команда на новую отправку посылки
+		if (HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_RX) {
+			HAL_UART_AbortReceive_IT(&huart1);
+		}
+
+		// Асинхронно ожидаем прием данных
 		HAL_UART_Receive_IT(&huart1, UART_INTERFACE_RESPONSE,
 				sizeof(UART_INTERFACE_RESPONSE));
 
 		break;
 	case INTERFACE_SPI:
 		HAL_SPI_Transmit(&hspi1, &data, 1, HAL_MAX_DELAY);
+
+		// Прервать асинхронных прием данных, так как была дана команда на новую отправку посылки
+		if (HAL_SPI_GetState(&huart1) == HAL_SPI_STATE_BUSY_RX) {
+			HAL_UART_AbortReceive_IT(&hspi1);
+		}
+
 		HAL_SPI_Receive_IT(&hspi1, SPI_INTERFACE_RESPONSE,
 				sizeof(SPI_INTERFACE_RESPONSE));
 		break;
 	case INTERFACE_I2C:
 		HAL_I2C_Master_Transmit(&hi2c1, 0x0, &data, 1, HAL_MAX_DELAY);
+
+		// Прервать асинхронных прием данных, так как была дана команда на новую отправку посылки
+		if (HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX
+				|| HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX_LISTEN) {
+			HAL_I2C_Master_Abort_IT(&hi2c1, 0x0);
+		}
+
 		HAL_I2C_Master_Receive_IT(&hi2c1, 0x0, I2C_INTERFACE_RESPONSE,
 				sizeof(I2C_INTERFACE_RESPONSE));
 		break;
 	case INTERFACE_GPIO:
+		HAL_GPIO_WritePin(GPIO_OUT0_GPIO_Port, GPIO_OUT0_Pin,
+				(data >> 0) & 0b00000001);
+		HAL_GPIO_WritePin(GPIO_OUT1_GPIO_Port, GPIO_OUT1_Pin,
+				(data >> 1) & 0b00000001);
+		HAL_GPIO_WritePin(GPIO_OUT2_GPIO_Port, GPIO_OUT2_Pin,
+				(data >> 2) & 0b00000001);
+		HAL_GPIO_WritePin(GPIO_OUT3_GPIO_Port, GPIO_OUT3_Pin,
+				(data >> 3) & 0b00000001);
+		HAL_GPIO_WritePin(GPIO_OUT4_GPIO_Port, GPIO_OUT4_Pin,
+				(data >> 4) & 0b00000001);
+		HAL_GPIO_WritePin(GPIO_OUT5_GPIO_Port, GPIO_OUT5_Pin,
+				(data >> 5) & 0b00000001);
+		HAL_GPIO_WritePin(GPIO_OUT6_GPIO_Port, GPIO_OUT6_Pin,
+				(data >> 6) & 0b00000001);
+		HAL_GPIO_WritePin(GPIO_OUT7_GPIO_Port, GPIO_OUT7_Pin,
+				(data >> 7) & 0b00000001);
 		break;
 	}
 }
@@ -365,8 +427,7 @@ void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t *answer) {
 	uint8_t error_code;
 	switch (interface) {
 	case INTERFACE_UART:
-		while (HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_RX
-				|| HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_TX_RX)
+		while (HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_RX)
 			;
 		error_code = HAL_UART_GetError(&huart1);
 
@@ -378,8 +439,7 @@ void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t *answer) {
 		}
 		break;
 	case INTERFACE_SPI:
-		while (HAL_SPI_GetState(&hspi1) == HAL_SPI_STATE_BUSY_RX
-				|| HAL_SPI_GetState(&hspi1) == HAL_SPI_STATE_BUSY_TX_RX)
+		while (HAL_SPI_GetState(&hspi1) == HAL_SPI_STATE_BUSY_RX)
 			;
 		error_code = HAL_SPI_GetError(&hspi1);
 
@@ -404,6 +464,23 @@ void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t *answer) {
 		}
 		break;
 	case INTERFACE_GPIO:
+		*answer = 0;
+		*answer = *answer
+				| (HAL_GPIO_ReadPin(GPIO_IN0_GPIO_Port, GPIO_IN0_Pin) << 0);
+		*answer = *answer
+				| (HAL_GPIO_ReadPin(GPIO_IN1_GPIO_Port, GPIO_IN1_Pin) << 1);
+		*answer = *answer
+				| (HAL_GPIO_ReadPin(GPIO_IN2_GPIO_Port, GPIO_IN2_Pin) << 2);
+		*answer = *answer
+				| (HAL_GPIO_ReadPin(GPIO_IN3_GPIO_Port, GPIO_IN3_Pin) << 3);
+		*answer = *answer
+				| (HAL_GPIO_ReadPin(GPIO_IN4_GPIO_Port, GPIO_IN4_Pin) << 4);
+		*answer = *answer
+				| (HAL_GPIO_ReadPin(GPIO_IN5_GPIO_Port, GPIO_IN5_Pin) << 5);
+		*answer = *answer
+				| (HAL_GPIO_ReadPin(GPIO_IN6_GPIO_Port, GPIO_IN6_Pin) << 6);
+		*answer = *answer
+				| (HAL_GPIO_ReadPin(GPIO_IN7_GPIO_Port, GPIO_IN7_Pin) << 7);
 		break;
 	}
 }
