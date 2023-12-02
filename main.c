@@ -64,10 +64,13 @@ static void MX_USART2_UART_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define SPI_MAX_DEVICES 4
+#define I2C_MAX_DEVICES 16
+
 uint8_t MTEMU_REQUEST[4] = { };
 uint8_t UART_INTERFACE_RESPONSE[1] = { };
-uint8_t I2C_INTERFACE_RESPONSE[1] = { };
-uint8_t SPI_INTERFACE_RESPONSE[1] = { };
+uint8_t I2C_INTERFACE_RESPONSE[16] = { };
+uint8_t SPI_INTERFACE_RESPONSE[4] = { };
 
 typedef enum //Available Interfaces
 {
@@ -206,6 +209,9 @@ static void MX_SPI1_Init(void) {
 
 	/* USER CODE BEGIN SPI1_Init 0 */
 
+	HAL_GPIO_WritePin(GPIOD,
+			not_SS3_Pin | not_SS3_Pin | not_SS3_Pin | not_SS3_Pin,
+			GPIO_PIN_SET);
 	/* USER CODE END SPI1_Init 0 */
 
 	/* USER CODE BEGIN SPI1_Init 1 */
@@ -318,6 +324,13 @@ static void MX_GPIO_Init(void) {
 			GPIO_PIN_8 | GPIO_PIN_10 | GPIO_PIN_12 | GPIO_PIN_7 | GPIO_PIN_9
 					| GPIO_PIN_11 | GPIO_PIN_13 | GPIO_PIN_14, GPIO_PIN_RESET);
 
+	/*Configure GPIO pins : not_SS3_Pin not_SS2_Pin not_SS0_Pin not_SS1_Pin */
+	GPIO_InitStruct.Pin = not_SS3_Pin | not_SS2_Pin | not_SS0_Pin | not_SS1_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
 	/*Configure GPIO pins : GPIO_IN2_Pin GPIO_IN5_Pin GPIO_IN0_Pin GPIO_IN3_Pin
 	 GPIO_IN6_Pin GPIO_IN1_Pin GPIO_IN4_Pin GPIO_IN7_Pin */
 	GPIO_InitStruct.Pin = GPIO_IN2_Pin | GPIO_IN5_Pin | GPIO_IN0_Pin
@@ -363,7 +376,8 @@ AVAILABLE_INTERFACES GetInterfaceByPort(const uint8_t port) {
 	return INTERFACE_UNKNOWN;
 }
 
-void SendRequestToInterface(AVAILABLE_INTERFACES interface, uint8_t data) {
+void SendRequestToInterface(AVAILABLE_INTERFACES interface, uint8_t address,
+		uint8_t data) {
 	switch (interface) {
 	case INTERFACE_UART:
 		// Отправить данные по интерфейсу юарт
@@ -380,27 +394,47 @@ void SendRequestToInterface(AVAILABLE_INTERFACES interface, uint8_t data) {
 
 		break;
 	case INTERFACE_SPI:
+		switch (address % SPI_MAX_DEVICES) {
+		case 0:
+			HAL_GPIO_WritePin(not_SS0_GPIO_Port, not_SS0_Pin, GPIO_PIN_RESET);
+			break;
+		case 1:
+			HAL_GPIO_WritePin(not_SS1_GPIO_Port, not_SS1_Pin, GPIO_PIN_RESET);
+			break;
+		case 2:
+			HAL_GPIO_WritePin(not_SS2_GPIO_Port, not_SS2_Pin, GPIO_PIN_RESET);
+			break;
+		case 3:
+			HAL_GPIO_WritePin(not_SS3_GPIO_Port, not_SS3_Pin, GPIO_PIN_RESET);
+			break;
+		}
 		HAL_SPI_Transmit(&hspi1, &data, 1, HAL_MAX_DELAY);
 
 		// Прервать асинхронных прием данных, так как была дана команда на новую отправку посылки
-		if (HAL_SPI_GetState(&huart1) == HAL_SPI_STATE_BUSY_RX) {
-			HAL_UART_AbortReceive_IT(&hspi1);
+		if (HAL_SPI_GetState(&hspi1) == HAL_SPI_STATE_BUSY_RX) {
+			HAL_SPI_Abort_IT(&hspi1);
 		}
 
-		HAL_SPI_Receive_IT(&hspi1, SPI_INTERFACE_RESPONSE,
-				sizeof(SPI_INTERFACE_RESPONSE));
+		// К SPI может быть подключено 4 устройства
+		// Надо ли, если 4 устройства?
+		// Требуется включать SS ноги для SPI
+		HAL_SPI_Receive_IT(&hspi1,
+				&SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES],
+				sizeof(SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES]));
 		break;
 	case INTERFACE_I2C:
-		HAL_I2C_Master_Transmit(&hi2c1, 0x0, &data, 1, HAL_MAX_DELAY);
+		HAL_I2C_Master_Transmit(&hi2c1, address, &data, 1, HAL_MAX_DELAY);
 
 		// Прервать асинхронных прием данных, так как была дана команда на новую отправку посылки
+		// Надо ли, если 16 устройств?
 		if (HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX
 				|| HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX_LISTEN) {
 			HAL_I2C_Master_Abort_IT(&hi2c1, 0x0);
 		}
 
-		HAL_I2C_Master_Receive_IT(&hi2c1, 0x0, I2C_INTERFACE_RESPONSE,
-				sizeof(I2C_INTERFACE_RESPONSE));
+		HAL_I2C_Master_Receive_IT(&hi2c1, address % I2C_MAX_DEVICES,
+				&I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES],
+				sizeof(I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES]));
 		break;
 	case INTERFACE_GPIO:
 		HAL_GPIO_WritePin(GPIO_OUT0_GPIO_Port, GPIO_OUT0_Pin,
@@ -423,7 +457,8 @@ void SendRequestToInterface(AVAILABLE_INTERFACES interface, uint8_t data) {
 	}
 }
 
-void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t *answer) {
+void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t address,
+		uint8_t *answer) {
 	uint8_t error_code;
 	switch (interface) {
 	case INTERFACE_UART:
@@ -443,8 +478,23 @@ void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t *answer) {
 			;
 		error_code = HAL_SPI_GetError(&hspi1);
 
+		switch (address % SPI_MAX_DEVICES) {
+		case 0:
+			HAL_GPIO_WritePin(not_SS0_GPIO_Port, not_SS0_Pin, GPIO_PIN_SET);
+			break;
+		case 1:
+			HAL_GPIO_WritePin(not_SS1_GPIO_Port, not_SS1_Pin, GPIO_PIN_SET);
+			break;
+		case 2:
+			HAL_GPIO_WritePin(not_SS2_GPIO_Port, not_SS2_Pin, GPIO_PIN_SET);
+			break;
+		case 3:
+			HAL_GPIO_WritePin(not_SS3_GPIO_Port, not_SS3_Pin, GPIO_PIN_SET);
+			break;
+		}
+
 		if (error_code == HAL_SPI_ERROR_NONE) {
-			*answer = SPI_INTERFACE_RESPONSE[0];
+			*answer = SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES];
 		} else {
 			// TODO Нужно указать на ошибку, хз, куда поместить
 			*answer = error_code;
@@ -498,11 +548,13 @@ void MtemuConnection() {
 void SendMtemuResponse() {
 	uint8_t MTEMU_RESPONSE[4] = { 2, MTEMU_REQUEST[1], '\x44', '\x82' };
 
-	AVAILABLE_INTERFACES interface = GetInterfaceByPort(MTEMU_REQUEST[1]);
+	// 4 старших бита - адрес девайса на интерфейса, 4 младших бита - интерфейс
+	AVAILABLE_INTERFACES interface = GetInterfaceByPort(
+			MTEMU_REQUEST[1] && 0b00001111);
+	uint8_t address = (MTEMU_REQUEST[1] >> 4) && 0b00001111;
 
 	if (interface != INTERFACE_UNKNOWN) {
-		GetResponseFromInterface(GetInterfaceByPort(MTEMU_REQUEST[1]),
-				&MTEMU_RESPONSE[2]);
+		GetResponseFromInterface(interface, address, &MTEMU_RESPONSE[2]);
 	} else {
 		// Ошибка - нераспознанный интерфейс
 	}
@@ -514,11 +566,13 @@ void SendMtemuResponse() {
 
 // Мтему хочет отослать нам данные
 void GetMtemuRequest() {
-	// Что здесь адрес устройства, подключенного на интерфейс?
-	AVAILABLE_INTERFACES interface = GetInterfaceByPort(MTEMU_REQUEST[1]);
+	// 4 старших бита - адрес девайса на интерфейса, 4 младших бита - интерфейс
+	AVAILABLE_INTERFACES interface = GetInterfaceByPort(
+			MTEMU_REQUEST[1] && 0b00001111);
+	uint8_t address = (MTEMU_REQUEST[1] >> 4) && 0b00001111;
 
 	if (interface != INTERFACE_UNKNOWN) {
-		SendRequestToInterface(interface, MTEMU_REQUEST[2]);
+		SendRequestToInterface(interface, address, MTEMU_REQUEST[2]);
 	} else {
 		// Ошибка - нераспознанный интерфейс
 	}

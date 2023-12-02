@@ -69,6 +69,16 @@ extern "C" {
 #define GPIO_OUT6_GPIO_Port GPIOE
 #define GPIO_OUT7_Pin GPIO_PIN_14
 #define GPIO_OUT7_GPIO_Port GPIOE
+
+
+#define not_SS3_Pin GPIO_PIN_4
+#define not_SS3_GPIO_Port GPIOD
+#define not_SS2_Pin GPIO_PIN_3
+#define not_SS2_GPIO_Port GPIOD
+#define not_SS0_Pin GPIO_PIN_1
+#define not_SS0_GPIO_Port GPIOD
+#define not_SS1_Pin GPIO_PIN_2
+#define not_SS1_GPIO_Port GPIOD
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
