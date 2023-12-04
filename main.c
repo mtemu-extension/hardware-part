@@ -72,6 +72,10 @@ uint8_t UART_INTERFACE_RESPONSE[1] = { };
 uint8_t I2C_INTERFACE_RESPONSE[16] = { };
 uint8_t SPI_INTERFACE_RESPONSE[4] = { };
 
+uint8_t UART_INTERFACE_DATA_RECIEVED = 0;
+uint8_t SPI_INTERFACE_DATA_RECIEVED = 0;
+uint8_t I2C_INTERFACE_DATA_RECIEVED = 0;
+
 typedef enum //Available Interfaces
 {
 	INTERFACE_UART,  //
@@ -115,7 +119,7 @@ int main(void) {
 	MX_USART2_UART_Init();
 	/* USER CODE BEGIN 2 */
 
-	HAL_NVIC_SetPriority(USART2_IRQn, 0, 0);
+	HAL_NVIC_SetPriority(USART2_IRQn, 1, 1);
 	HAL_NVIC_EnableIRQ(USART2_IRQn);
 	HAL_UART_Receive_IT(&huart2, MTEMU_REQUEST, sizeof(MTEMU_REQUEST));
 	/* USER CODE END 2 */
@@ -210,8 +214,7 @@ static void MX_SPI1_Init(void) {
 	/* USER CODE BEGIN SPI1_Init 0 */
 
 	HAL_GPIO_WritePin(GPIOD,
-			not_SS3_Pin | not_SS3_Pin | not_SS3_Pin | not_SS3_Pin,
-			GPIO_PIN_SET);
+	not_SS3_Pin | not_SS3_Pin | not_SS3_Pin | not_SS3_Pin, GPIO_PIN_SET);
 	/* USER CODE END SPI1_Init 0 */
 
 	/* USER CODE BEGIN SPI1_Init 1 */
@@ -318,6 +321,10 @@ static void MX_GPIO_Init(void) {
 	__HAL_RCC_GPIOC_CLK_ENABLE();
 	__HAL_RCC_GPIOH_CLK_ENABLE();
 	__HAL_RCC_GPIOE_CLK_ENABLE();
+
+	/*Configure GPIO pin Output Level */
+	HAL_GPIO_WritePin(GPIOD,
+	not_SS3_Pin | not_SS2_Pin | not_SS0_Pin | not_SS1_Pin, GPIO_PIN_RESET);
 
 	/*Configure GPIO pin Output Level */
 	HAL_GPIO_WritePin(GPIOE,
@@ -429,7 +436,7 @@ void SendRequestToInterface(AVAILABLE_INTERFACES interface, uint8_t address,
 		// Надо ли, если 16 устройств?
 		if (HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX
 				|| HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX_LISTEN) {
-			HAL_I2C_Master_Abort_IT(&hi2c1, 0x0);
+			HAL_I2C_Master_Abort_IT(&hi2c1, address % I2C_MAX_DEVICES);
 		}
 
 		HAL_I2C_Master_Receive_IT(&hi2c1, address % I2C_MAX_DEVICES,
@@ -462,8 +469,10 @@ void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t address,
 	uint8_t error_code;
 	switch (interface) {
 	case INTERFACE_UART:
-		while (HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_RX)
+		while (UART_INTERFACE_DATA_RECIEVED != 1)
 			;
+
+		UART_INTERFACE_DATA_RECIEVED = 0;
 		error_code = HAL_UART_GetError(&huart1);
 
 		if (error_code == HAL_UART_ERROR_NONE) {
@@ -474,8 +483,9 @@ void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t address,
 		}
 		break;
 	case INTERFACE_SPI:
-		while (HAL_SPI_GetState(&hspi1) == HAL_SPI_STATE_BUSY_RX)
+		while (SPI_INTERFACE_DATA_RECIEVED != 1)
 			;
+		SPI_INTERFACE_DATA_RECIEVED = 0;
 		error_code = HAL_SPI_GetError(&hspi1);
 
 		switch (address % SPI_MAX_DEVICES) {
@@ -501,9 +511,10 @@ void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t address,
 		}
 		break;
 	case INTERFACE_I2C:
-		while (HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX
-				|| HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX_LISTEN)
+		while (I2C_INTERFACE_DATA_RECIEVED != 1)
 			;
+
+		I2C_INTERFACE_DATA_RECIEVED = 0;
 		error_code = HAL_I2C_GetError(&hi2c1);
 
 		if (error_code == HAL_I2C_ERROR_NONE) {
@@ -548,10 +559,10 @@ void MtemuConnection() {
 void SendMtemuResponse() {
 	uint8_t MTEMU_RESPONSE[4] = { 2, MTEMU_REQUEST[1], '\x44', '\x82' };
 
-	// 4 старших бита - адрес девайса на интерфейса, 4 младших бита - интерфейс
+	// 4 старших бита - адрес девайса на интерфейсе, 4 младших бита - интерфейс
 	AVAILABLE_INTERFACES interface = GetInterfaceByPort(
-			MTEMU_REQUEST[1] && 0b00001111);
-	uint8_t address = (MTEMU_REQUEST[1] >> 4) && 0b00001111;
+			MTEMU_REQUEST[1] & 0b00001111);
+	uint8_t address = (MTEMU_REQUEST[1] >> 4) & 0b00001111;
 
 	if (interface != INTERFACE_UNKNOWN) {
 		GetResponseFromInterface(interface, address, &MTEMU_RESPONSE[2]);
@@ -568,8 +579,8 @@ void SendMtemuResponse() {
 void GetMtemuRequest() {
 	// 4 старших бита - адрес девайса на интерфейса, 4 младших бита - интерфейс
 	AVAILABLE_INTERFACES interface = GetInterfaceByPort(
-			MTEMU_REQUEST[1] && 0b00001111);
-	uint8_t address = (MTEMU_REQUEST[1] >> 4) && 0b00001111;
+			MTEMU_REQUEST[1] & 0b00001111);
+	uint8_t address = (MTEMU_REQUEST[1] >> 4) & 0b00001111;
 
 	if (interface != INTERFACE_UNKNOWN) {
 		SendRequestToInterface(interface, address, MTEMU_REQUEST[2]);
@@ -602,18 +613,22 @@ void MtemuUartHandler() {
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart == &huart2) {
 		MtemuUartHandler();
-	};
+	} else {
+		UART_INTERFACE_DATA_RECIEVED = 1;
+	}
 
 }
 
 void HAL_SPI_RxCpltCallback(SPI_HandleTypeDef *hspi) {
-// TX-RX Done .. Do Something ...
-	;
+
+	SPI_INTERFACE_DATA_RECIEVED = 1;
+
 }
 
 void HAL_I2C_MasterRxCpltCallback(I2C_HandleTypeDef *hi2c) {
-// I2C data ready!
-	;
+
+	I2C_INTERFACE_DATA_RECIEVED = 1;
+
 }
 
 /* USER CODE END 4 */
