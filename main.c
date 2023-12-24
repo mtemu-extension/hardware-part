@@ -21,7 +21,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "lcd.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -41,6 +41,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 I2C_HandleTypeDef hi2c1;
+I2C_HandleTypeDef hi2c3;
 
 SPI_HandleTypeDef hspi1;
 
@@ -58,6 +59,7 @@ static void MX_I2C1_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_USART1_UART_Init(void);
 static void MX_USART2_UART_Init(void);
+static void MX_I2C3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -76,12 +78,32 @@ uint8_t UART_INTERFACE_DATA_RECIEVED = 0;
 uint8_t SPI_INTERFACE_DATA_RECIEVED = 0;
 uint8_t I2C_INTERFACE_DATA_RECIEVED = 0;
 
-typedef enum //Available Interfaces
-{
-	INTERFACE_UART,  //
+// GPIOA=0/UART=1 - BIT7
+// GPIOC=0/SPI=1 - BIT6
+// GPIOE=0/I2C=1 - BIT5
+// не используется - BIT4
+// GPIOA OUTPUT=0/GPIOA INPUT=1 - BIT3
+// GPIOC OUTPUT=0/GPIOC INPUT=1 - BIT2
+// GPIOE OUTPUT=0/GPIOE INPUT=1 - BIT1
+// не используется - BIT0
+uint8_t CONTROL_REGISTER = 0;
+
+char *FIRST_ROW_LCD = "Welcome to";
+char *SECOND_ROW_LCD = "PortExtender";
+
+typedef enum {
+	// Интерфейсы последовательной передачи данных
+	INTERFACE_UART,
 	INTERFACE_SPI,  //
-	INTERFACE_I2C,  //
-	INTERFACE_GPIO,
+	INTERFACE_I2C,
+	// Параллельные интерфейсы передачи данных (параллельные ноги GPIO)
+	INTERFACE_GPIOA,
+	INTERFACE_GPIOC,
+	INTERFACE_GPIOE,
+
+	// Управляющий регистр
+	CTRL_REG,
+
 	INTERFACE_UNKNOWN
 } AVAILABLE_INTERFACES;
 /* USER CODE END 0 */
@@ -117,7 +139,11 @@ int main(void) {
 	MX_SPI1_Init();
 	MX_USART1_UART_Init();
 	MX_USART2_UART_Init();
+	MX_I2C3_Init();
 	/* USER CODE BEGIN 2 */
+
+	// Turn on backlight
+	prepare_lcd();
 
 	HAL_NVIC_SetPriority(USART2_IRQn, 1, 1);
 	HAL_NVIC_EnableIRQ(USART2_IRQn);
@@ -205,6 +231,38 @@ static void MX_I2C1_Init(void) {
 }
 
 /**
+ * @brief I2C3 Initialization Function
+ * @param None
+ * @retval None
+ */
+static void MX_I2C3_Init(void) {
+
+	/* USER CODE BEGIN I2C3_Init 0 */
+
+	/* USER CODE END I2C3_Init 0 */
+
+	/* USER CODE BEGIN I2C3_Init 1 */
+
+	/* USER CODE END I2C3_Init 1 */
+	hi2c3.Instance = I2C3;
+	hi2c3.Init.ClockSpeed = 100000;
+	hi2c3.Init.DutyCycle = I2C_DUTYCYCLE_2;
+	hi2c3.Init.OwnAddress1 = 0;
+	hi2c3.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+	hi2c3.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+	hi2c3.Init.OwnAddress2 = 0;
+	hi2c3.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+	hi2c3.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+	if (HAL_I2C_Init(&hi2c3) != HAL_OK) {
+		Error_Handler();
+	}
+	/* USER CODE BEGIN I2C3_Init 2 */
+
+	/* USER CODE END I2C3_Init 2 */
+
+}
+
+/**
  * @brief SPI1 Initialization Function
  * @param None
  * @retval None
@@ -214,7 +272,7 @@ static void MX_SPI1_Init(void) {
 	/* USER CODE BEGIN SPI1_Init 0 */
 
 	HAL_GPIO_WritePin(GPIOD,
-	not_SS3_Pin | not_SS3_Pin | not_SS3_Pin | not_SS3_Pin, GPIO_PIN_SET);
+	not_SS0_Pin | not_SS1_Pin | not_SS2_Pin | not_SS3_Pin, GPIO_PIN_SET);
 	/* USER CODE END SPI1_Init 0 */
 
 	/* USER CODE BEGIN SPI1_Init 1 */
@@ -322,41 +380,48 @@ static void MX_GPIO_Init(void) {
 	__HAL_RCC_GPIOH_CLK_ENABLE();
 	__HAL_RCC_GPIOE_CLK_ENABLE();
 
+	/* USER CODE BEGIN MX_GPIO_Init_2 */
 	/*Configure GPIO pin Output Level */
-	HAL_GPIO_WritePin(GPIOD,
-	not_SS3_Pin | not_SS2_Pin | not_SS0_Pin | not_SS1_Pin, GPIO_PIN_RESET);
 
-	/*Configure GPIO pin Output Level */
-	HAL_GPIO_WritePin(GPIOE,
-			GPIO_PIN_8 | GPIO_PIN_10 | GPIO_PIN_12 | GPIO_PIN_7 | GPIO_PIN_9
-					| GPIO_PIN_11 | GPIO_PIN_13 | GPIO_PIN_14, GPIO_PIN_RESET);
-
-	/*Configure GPIO pins : not_SS3_Pin not_SS2_Pin not_SS0_Pin not_SS1_Pin */
+	// GPIO управления SPI
 	GPIO_InitStruct.Pin = not_SS3_Pin | not_SS2_Pin | not_SS0_Pin | not_SS1_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+	HAL_GPIO_WritePin(GPIOD,
+	not_SS3_Pin | not_SS2_Pin | not_SS0_Pin | not_SS1_Pin, GPIO_PIN_SET);
 
-	/*Configure GPIO pins : GPIO_IN2_Pin GPIO_IN5_Pin GPIO_IN0_Pin GPIO_IN3_Pin
-	 GPIO_IN6_Pin GPIO_IN1_Pin GPIO_IN4_Pin GPIO_IN7_Pin */
-	GPIO_InitStruct.Pin = GPIO_IN2_Pin | GPIO_IN5_Pin | GPIO_IN0_Pin
-			| GPIO_IN3_Pin | GPIO_IN6_Pin | GPIO_IN1_Pin | GPIO_IN4_Pin
-			| GPIO_IN7_Pin;
-	GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
-
-	/*Configure GPIO pins : PE8 PE10 PE12 PE7
-	 PE9 PE11 PE13 PE14 */
-	GPIO_InitStruct.Pin = GPIO_PIN_8 | GPIO_PIN_10 | GPIO_PIN_12 | GPIO_PIN_7
-			| GPIO_PIN_9 | GPIO_PIN_11 | GPIO_PIN_13 | GPIO_PIN_14;
+	// GPIOE последовательный интерфейс
+	GPIO_InitStruct.Pin = GPIO_E0_Pin | GPIO_E1_Pin | GPIO_E2_Pin | GPIO_E3_Pin
+			| GPIO_E4_Pin | GPIO_E5_Pin | GPIO_E6_Pin | GPIO_E7_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
-	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-	HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+	HAL_GPIO_WritePin(GPIOE,
+			GPIO_E0_Pin | GPIO_E1_Pin | GPIO_E2_Pin | GPIO_E3_Pin | GPIO_E4_Pin
+					| GPIO_E5_Pin | GPIO_E6_Pin | GPIO_E7_Pin, GPIO_PIN_RESET);
 
-	/* USER CODE BEGIN MX_GPIO_Init_2 */
+	// GPIOA последовательный интерфейс
+	GPIO_InitStruct.Pin = GPIO_A0_Pin | GPIO_A1_Pin | GPIO_A2_Pin | GPIO_A3_Pin
+			| GPIO_A4_Pin | GPIO_A5_Pin | GPIO_A6_Pin | GPIO_A7_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+	HAL_GPIO_WritePin(GPIOA,
+			GPIO_A0_Pin | GPIO_A1_Pin | GPIO_A2_Pin | GPIO_A3_Pin | GPIO_A4_Pin
+					| GPIO_A5_Pin | GPIO_A6_Pin | GPIO_A7_Pin, GPIO_PIN_RESET);
+
+	// GPIOС последовательный интерфейс
+	GPIO_InitStruct.Pin = GPIO_С0_Pin | GPIO_С1_Pin | GPIO_С2_Pin | GPIO_С3_Pin
+			| GPIO_С4_Pin | GPIO_С5_Pin | GPIO_С6_Pin | GPIO_С7_Pin;
+	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+	GPIO_InitStruct.Pull = GPIO_NOPULL;
+	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+	HAL_GPIO_WritePin(GPIOC,
+			GPIO_С0_Pin | GPIO_С1_Pin | GPIO_С2_Pin | GPIO_С3_Pin | GPIO_С4_Pin
+					| GPIO_С5_Pin | GPIO_С6_Pin | GPIO_С7_Pin, GPIO_PIN_RESET);
+
 	/* USER CODE END MX_GPIO_Init_2 */
 }
 
@@ -366,19 +431,28 @@ AVAILABLE_INTERFACES GetInterfaceByPort(const uint8_t port) {
 	case 1:
 	case 2:
 	case 3:
+		if (COTROL_REGISTER & 0b10000000 == 0) {
+			return INTERFACE_GPIOA;
+		}
 		return INTERFACE_UART;
 	case 5:
 	case 6:
 	case 7:
+		if (COTROL_REGISTER & 0b01000000 == 0) {
+			return INTERFACE_GPIOC;
+		}
 		return INTERFACE_SPI;
 	case 9:
 	case 10:
 	case 11:
+		if (COTROL_REGISTER & 0b00100000 == 0) {
+			return INTERFACE_GPIOA;
+		}
 		return INTERFACE_I2C;
 	case 13:
 	case 14:
 	case 15:
-		return INTERFACE_GPIO;
+		return CTRL_REG;
 	}
 	return INTERFACE_UNKNOWN;
 }
@@ -388,6 +462,9 @@ void SendRequestToInterface(AVAILABLE_INTERFACES interface, uint8_t address,
 	switch (interface) {
 	case INTERFACE_UART:
 		// Отправить данные по интерфейсу юарт
+		FIRST_ROW_LCD = "MT->UART";
+		sprintf(SECOND_ROW_LCD, "0x%x", data);
+
 		HAL_UART_Transmit(&huart1, &data, 1, HAL_MAX_DELAY);
 
 		// Прервать асинхронных прием данных, так как была дана команда на новую отправку посылки
@@ -395,12 +472,15 @@ void SendRequestToInterface(AVAILABLE_INTERFACES interface, uint8_t address,
 			HAL_UART_AbortReceive_IT(&huart1);
 		}
 
+		UART_INTERFACE_DATA_RECIEVED = 0;
 		// Асинхронно ожидаем прием данных
 		HAL_UART_Receive_IT(&huart1, UART_INTERFACE_RESPONSE,
 				sizeof(UART_INTERFACE_RESPONSE));
 
 		break;
 	case INTERFACE_SPI:
+		sprintf(FIRST_ROW_LCD, "%s(%d)", "MT->SPI", address % SPI_MAX_DEVICES);
+		sprintf(SECOND_ROW_LCD, "0x%x", data);
 		switch (address % SPI_MAX_DEVICES) {
 		case 0:
 			HAL_GPIO_WritePin(not_SS0_GPIO_Port, not_SS0_Pin, GPIO_PIN_RESET);
@@ -418,32 +498,41 @@ void SendRequestToInterface(AVAILABLE_INTERFACES interface, uint8_t address,
 		HAL_SPI_Transmit(&hspi1, &data, 1, HAL_MAX_DELAY);
 
 		// Прервать асинхронных прием данных, так как была дана команда на новую отправку посылки
-		if (HAL_SPI_GetState(&hspi1) == HAL_SPI_STATE_BUSY_RX) {
-			HAL_SPI_Abort_IT(&hspi1);
-		}
+		/*if (HAL_SPI_GetState(&hspi1) == HAL_SPI_STATE_BUSY_RX) {
+		 HAL_SPI_Abort_IT(&hspi1);
+		 }
 
-		// К SPI может быть подключено 4 устройства
-		// Надо ли, если 4 устройства?
-		// Требуется включать SS ноги для SPI
-		HAL_SPI_Receive_IT(&hspi1,
-				&SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES],
-				sizeof(SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES]));
+		 SPI_INTERFACE_DATA_RECIEVED = 0;
+		 HAL_SPI_Receive_IT(&hspi1,
+		 &SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES],
+		 sizeof(SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES]));*/
 		break;
 	case INTERFACE_I2C:
-		HAL_I2C_Master_Transmit(&hi2c1, address, &data, 1, HAL_MAX_DELAY);
+		sprintf(FIRST_ROW_LCD, "%s(%d)", "MT->I2C", address % I2C_MAX_DEVICES);
+		sprintf(SECOND_ROW_LCD, "0x%x", data);
+
+		HAL_I2C_Master_Transmit(&hi2c1, 0x20, &data, 1,
+		HAL_MAX_DELAY);
+
+		// Синхронное говно (принимаем без прерываний)
 
 		// Прервать асинхронных прием данных, так как была дана команда на новую отправку посылки
 		// Надо ли, если 16 устройств?
-		if (HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX
-				|| HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX_LISTEN) {
-			HAL_I2C_Master_Abort_IT(&hi2c1, address % I2C_MAX_DEVICES);
-		}
+		/*if (HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX
+		 || HAL_I2C_GetState(&hi2c1) == HAL_I2C_STATE_BUSY_RX_LISTEN) {
+		 HAL_I2C_Master_Abort_IT(&hi2c1, address % I2C_MAX_DEVICES);
+		 }
 
-		HAL_I2C_Master_Receive_IT(&hi2c1, address % I2C_MAX_DEVICES,
-				&I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES],
-				sizeof(I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES]));
+		 I2C_INTERFACE_DATA_RECIEVED = 0;
+
+		 HAL_I2C_Master_Receive_IT(&hi2c1, address % I2C_MAX_DEVICES,
+		 &I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES],
+		 sizeof(I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES]));*/
 		break;
 	case INTERFACE_GPIO:
+		FIRST_ROW_LCD = "MT->GPIO";
+		sprintf(SECOND_ROW_LCD, "0x%x", data);
+
 		HAL_GPIO_WritePin(GPIO_OUT0_GPIO_Port, GPIO_OUT0_Pin,
 				(data >> 0) & 0b00000001);
 		HAL_GPIO_WritePin(GPIO_OUT1_GPIO_Port, GPIO_OUT1_Pin,
@@ -469,23 +558,32 @@ void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t address,
 	uint8_t error_code;
 	switch (interface) {
 	case INTERFACE_UART:
+
 		while (UART_INTERFACE_DATA_RECIEVED != 1)
 			;
-
-		UART_INTERFACE_DATA_RECIEVED = 0;
 		error_code = HAL_UART_GetError(&huart1);
 
+		FIRST_ROW_LCD = "MT<-UART";
 		if (error_code == HAL_UART_ERROR_NONE) {
 			*answer = UART_INTERFACE_RESPONSE[0];
+			sprintf(SECOND_ROW_LCD, "0x%x", UART_INTERFACE_RESPONSE[0]);
 		} else {
 			// TODO Нужно указать на ошибку, хз, куда поместить
 			*answer = error_code;
+			sprintf(SECOND_ROW_LCD, "%s:0x%x", "Error code", error_code);
 		}
 		break;
 	case INTERFACE_SPI:
-		while (SPI_INTERFACE_DATA_RECIEVED != 1)
-			;
-		SPI_INTERFACE_DATA_RECIEVED = 0;
+		// Все принимается синхронно
+		//while (SPI_INTERFACE_DATA_RECIEVED != 1)
+		//	;
+
+		// Синхронное говно (принимаем без прерываний)
+		HAL_SPI_Receive(&hspi1,
+				&SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES],
+				sizeof(SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES]),
+				HAL_MAX_DELAY);
+
 		error_code = HAL_SPI_GetError(&hspi1);
 
 		switch (address % SPI_MAX_DEVICES) {
@@ -503,25 +601,35 @@ void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t address,
 			break;
 		}
 
+		sprintf(FIRST_ROW_LCD, "%s(%d)", "MT<-SPI", address % SPI_MAX_DEVICES);
 		if (error_code == HAL_SPI_ERROR_NONE) {
 			*answer = SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES];
+			sprintf(SECOND_ROW_LCD, "0x%x",
+					SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES]);
 		} else {
-			// TODO Нужно указать на ошибку, хз, куда поместить
 			*answer = error_code;
+			sprintf(SECOND_ROW_LCD, "%s:0x%x", "Error code", error_code);
 		}
 		break;
 	case INTERFACE_I2C:
-		while (I2C_INTERFACE_DATA_RECIEVED != 1)
-			;
+		// Все принимается синхронно
+		//while (I2C_INTERFACE_DATA_RECIEVED != 1)
+		//	;
+		HAL_I2C_Master_Receive(&hi2c1, 0x20,
+				&I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES],
+				sizeof(I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES]),
+				HAL_MAX_DELAY);
 
-		I2C_INTERFACE_DATA_RECIEVED = 0;
 		error_code = HAL_I2C_GetError(&hi2c1);
 
+		sprintf(FIRST_ROW_LCD, "%s(%d)", "MT<-I2C", address % I2C_MAX_DEVICES);
 		if (error_code == HAL_I2C_ERROR_NONE) {
-			*answer = I2C_INTERFACE_RESPONSE[0];
+			*answer = I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES];
+			sprintf(SECOND_ROW_LCD, "0x%x",
+					I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES]);
 		} else {
-			// TODO Нужно указать на ошибку, хз, куда поместить
 			*answer = error_code;
+			sprintf(SECOND_ROW_LCD, "%s:0x%x", "Error code", error_code);
 		}
 		break;
 	case INTERFACE_GPIO:
@@ -542,12 +650,16 @@ void GetResponseFromInterface(AVAILABLE_INTERFACES interface, uint8_t address,
 				| (HAL_GPIO_ReadPin(GPIO_IN6_GPIO_Port, GPIO_IN6_Pin) << 6);
 		*answer = *answer
 				| (HAL_GPIO_ReadPin(GPIO_IN7_GPIO_Port, GPIO_IN7_Pin) << 7);
+
+		FIRST_ROW_LCD = "MT<-GPIO";
+		sprintf(SECOND_ROW_LCD, "0x%x", *answer);
 		break;
 	}
 }
 
 // Соединение с мтему
 void MtemuConnection() {
+
 	uint8_t MTEMU_RESPONSE[18] = { "\x10TMBelka1234567EP\x90" };
 
 	HAL_UART_Transmit(&huart2, MTEMU_RESPONSE, sizeof(MTEMU_RESPONSE),
@@ -598,7 +710,9 @@ void GetMtemuRequest() {
 void MtemuUartHandler() {
 	if (MTEMU_REQUEST[0] == 98 && MTEMU_REQUEST[1] == 0 && MTEMU_REQUEST[2] == 0
 			&& MTEMU_REQUEST[3] == 226) {
+		// Соединение с Mtemu
 		MtemuConnection();
+
 	}
 	if (MTEMU_REQUEST[0] == 34 && MTEMU_REQUEST[3] == 162) {
 		// Mtemu запросил ответ
@@ -608,6 +722,7 @@ void MtemuUartHandler() {
 		// Mtemu плюнул информацию
 		GetMtemuRequest();
 	}
+
 }
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
