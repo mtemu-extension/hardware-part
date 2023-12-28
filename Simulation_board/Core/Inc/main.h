@@ -88,6 +88,15 @@ extern "C" {
 #define GPIO_C0_GPIO_Port GPIOC
 
 
+#define not_SS7_Pin GPIO_PIN_12
+#define not_SS7_GPIO_Port GPIOD
+#define not_SS6_Pin GPIO_PIN_11
+#define not_SS6_GPIO_Port GPIOD
+#define not_SS5_Pin GPIO_PIN_10
+#define not_SS5_GPIO_Port GPIOD
+#define not_SS4_Pin GPIO_PIN_9
+#define not_SS4_GPIO_Port GPIOD
+
 #define not_SS3_Pin GPIO_PIN_4
 #define not_SS3_GPIO_Port GPIOD
 #define not_SS2_Pin GPIO_PIN_3

@@ -65,7 +65,7 @@ static void MX_I2C3_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-#define SPI_MAX_DEVICES 4
+#define SPI_MAX_DEVICES 8
 #define I2C_MAX_DEVICES 16
 
 uint8_t MTEMU_REQUEST[4] = { };
@@ -361,13 +361,15 @@ static void MX_GPIO_Init(void) {
 	/*Configure GPIO pin Output Level */
 
 	// GPIO управления SPI
-	GPIO_InitStruct.Pin = not_SS3_Pin | not_SS2_Pin | not_SS0_Pin | not_SS1_Pin;
+	GPIO_InitStruct.Pin = not_SS7_Pin | not_SS6_Pin | not_SS5_Pin | not_SS4_Pin
+			| not_SS3_Pin | not_SS2_Pin | not_SS1_Pin | not_SS0_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
 	GPIO_InitStruct.Pull = GPIO_NOPULL;
 	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
 	HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 	HAL_GPIO_WritePin(GPIOD,
-	not_SS3_Pin | not_SS2_Pin | not_SS0_Pin | not_SS1_Pin, GPIO_PIN_SET);
+			not_SS7_Pin | not_SS6_Pin | not_SS5_Pin | not_SS4_Pin | not_SS3_Pin
+					| not_SS2_Pin | not_SS1_Pin | not_SS0_Pin, GPIO_PIN_SET);
 
 	// GPIOE параллельный интерфейс
 	GPIO_InitStruct.Pin = GPIO_E0_Pin | GPIO_E1_Pin | GPIO_E2_Pin | GPIO_E3_Pin
@@ -525,6 +527,18 @@ void SendRequestToDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 		case 3:
 			HAL_GPIO_WritePin(not_SS3_GPIO_Port, not_SS3_Pin, GPIO_PIN_RESET);
 			break;
+		case 4:
+			HAL_GPIO_WritePin(not_SS4_GPIO_Port, not_SS4_Pin, GPIO_PIN_RESET);
+			break;
+		case 5:
+			HAL_GPIO_WritePin(not_SS5_GPIO_Port, not_SS5_Pin, GPIO_PIN_RESET);
+			break;
+		case 6:
+			HAL_GPIO_WritePin(not_SS6_GPIO_Port, not_SS6_Pin, GPIO_PIN_RESET);
+			break;
+		case 7:
+			HAL_GPIO_WritePin(not_SS7_GPIO_Port, not_SS7_Pin, GPIO_PIN_RESET);
+			break;
 		}
 		HAL_SPI_Transmit(&hspi1, &data, 1, HAL_MAX_DELAY);
 		break;
@@ -657,6 +671,18 @@ void GetResponseFromDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 			break;
 		case 3:
 			HAL_GPIO_WritePin(not_SS3_GPIO_Port, not_SS3_Pin, GPIO_PIN_SET);
+			break;
+		case 4:
+			HAL_GPIO_WritePin(not_SS4_GPIO_Port, not_SS4_Pin, GPIO_PIN_SET);
+			break;
+		case 5:
+			HAL_GPIO_WritePin(not_SS5_GPIO_Port, not_SS5_Pin, GPIO_PIN_SET);
+			break;
+		case 6:
+			HAL_GPIO_WritePin(not_SS6_GPIO_Port, not_SS6_Pin, GPIO_PIN_SET);
+			break;
+		case 7:
+			HAL_GPIO_WritePin(not_SS7_GPIO_Port, not_SS7_Pin, GPIO_PIN_SET);
 			break;
 		}
 
