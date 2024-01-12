@@ -36,6 +36,8 @@ extern "C" {
 
 /* Exported types ------------------------------------------------------------*/
 /* USER CODE BEGIN ET */
+
+//макросы выходов последовательного интерфейса GPIOA
 #define GPIO_A0_Pin GPIO_PIN_0
 #define GPIO_A0_GPIO_Port GPIOA
 #define GPIO_A1_Pin GPIO_PIN_1
@@ -53,6 +55,8 @@ extern "C" {
 #define GPIO_A7_Pin GPIO_PIN_7
 #define GPIO_A7_GPIO_Port GPIOA
 
+
+//макросы выходов последовательного интерфейса GPIOE
 #define GPIO_E0_Pin GPIO_PIN_7
 #define GPIO_E0_GPIO_Port GPIOE
 #define GPIO_E1_Pin GPIO_PIN_8
@@ -70,6 +74,8 @@ extern "C" {
 #define GPIO_E7_Pin GPIO_PIN_14
 #define GPIO_E7_GPIO_Port GPIOE
 
+
+//макросы выходов последовательного интерфейса GPIOC
 #define GPIO_C7_Pin GPIO_PIN_7
 #define GPIO_C7_GPIO_Port GPIOC
 #define GPIO_C6_Pin GPIO_PIN_6
@@ -88,6 +94,7 @@ extern "C" {
 #define GPIO_C0_GPIO_Port GPIOC
 
 
+//макросы управляющих выходов (not SS) интерфейса SPI
 #define not_SS7_Pin GPIO_PIN_12
 #define not_SS7_GPIO_Port GPIOD
 #define not_SS6_Pin GPIO_PIN_11

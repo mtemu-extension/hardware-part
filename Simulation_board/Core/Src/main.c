@@ -40,11 +40,13 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+//глобальная переменная интерфейса I2C
 I2C_HandleTypeDef hi2c1;
-
+//глобальная переменная интерфейса SPI
 SPI_HandleTypeDef hspi1;
-
+//глобальная переменная интерфейса UART, к которому подключено коммутируемое устройство
 UART_HandleTypeDef huart1;
+//глобальная переменная интерфейса UART, по которому осуществляется общение с эмулятором
 UART_HandleTypeDef huart2;
 
 /* USER CODE BEGIN PV */
@@ -65,18 +67,21 @@ static void MX_I2C3_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+//макросы, определяющие максимальное количество подключаемых устройств к интерфейсам SPI и I2C
 #define SPI_MAX_DEVICES 8
 #define I2C_MAX_DEVICES 16
 
+//массив - пакет с ответом на запрос эмулятора
 uint8_t MTEMU_REQUEST[4] = { };
+//глобальные переменные с данными от устройств, подключенных к интерфейсам
 uint8_t UART_INTERFACE_RESPONSE[1] = { };
-uint8_t I2C_INTERFACE_RESPONSE[16] = { };
-uint8_t SPI_INTERFACE_RESPONSE[4] = { };
+uint8_t I2C_INTERFACE_RESPONSE[I2C_MAX_DEVICES] = { };
+uint8_t SPI_INTERFACE_RESPONSE[SPI_MAX_DEVICES] = { };
 
+//глобальная переменная со статусом получения ответа от подключенного к UART устройства
 uint8_t UART_INTERFACE_DATA_RECIEVED = 0;
-uint8_t SPI_INTERFACE_DATA_RECIEVED = 0;
-uint8_t I2C_INTERFACE_DATA_RECIEVED = 0;
 
+//программный управляющий регистр
 // GPIOA=0/UART=1 - BIT7
 // GPIOC=0/SPI=1 - BIT6
 // GPIOE=0/I2C=1 - BIT5
@@ -87,6 +92,7 @@ uint8_t I2C_INTERFACE_DATA_RECIEVED = 0;
 // не используется - BIT0
 uint8_t CONTROL_REGISTER = 0;
 
+//выводимая отладочная информация на дисплей
 char *FIRST_ROW_LCD = "Welcome to";
 char *SECOND_ROW_LCD = "PortExtender";
 
@@ -140,7 +146,6 @@ int main(void) {
 	MX_USART2_UART_Init();
 	/* USER CODE BEGIN 2 */
 
-	// Turn on backlight
 	prepare_lcd();
 
 	HAL_NVIC_SetPriority(USART2_IRQn, 1, 1);
@@ -150,16 +155,20 @@ int main(void) {
 
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
+
+	//цикл, обновляющий выводимую информацию на LCD дисплей
 	while (1) {
-		/* USER CODE END WHILE */
+
 		lcd_clear();
 		lcd_set_cursor(0, 0);
 		lcd_write_string(FIRST_ROW_LCD);
 		lcd_set_cursor(1, 0);
 		lcd_write_string(SECOND_ROW_LCD);
-		HAL_Delay(1500);
-		/* USER CODE BEGIN 3 */
+		HAL_Delay(1000);
+
 	}
+	/* USER CODE END WHILE */
+	/* USER CODE BEGIN 3 */
 	/* USER CODE END 3 */
 }
 
@@ -360,7 +369,7 @@ static void MX_GPIO_Init(void) {
 	/* USER CODE BEGIN MX_GPIO_Init_2 */
 	/*Configure GPIO pin Output Level */
 
-	// GPIO управления SPI
+	//выходы (not SS) управления SPI
 	GPIO_InitStruct.Pin = not_SS7_Pin | not_SS6_Pin | not_SS5_Pin | not_SS4_Pin
 			| not_SS3_Pin | not_SS2_Pin | not_SS1_Pin | not_SS0_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -371,7 +380,7 @@ static void MX_GPIO_Init(void) {
 			not_SS7_Pin | not_SS6_Pin | not_SS5_Pin | not_SS4_Pin | not_SS3_Pin
 					| not_SS2_Pin | not_SS1_Pin | not_SS0_Pin, GPIO_PIN_SET);
 
-	// GPIOE параллельный интерфейс
+	//GPIOE параллельный интерфейс
 	GPIO_InitStruct.Pin = GPIO_E0_Pin | GPIO_E1_Pin | GPIO_E2_Pin | GPIO_E3_Pin
 			| GPIO_E4_Pin | GPIO_E5_Pin | GPIO_E6_Pin | GPIO_E7_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -381,7 +390,7 @@ static void MX_GPIO_Init(void) {
 			GPIO_E0_Pin | GPIO_E1_Pin | GPIO_E2_Pin | GPIO_E3_Pin | GPIO_E4_Pin
 					| GPIO_E5_Pin | GPIO_E6_Pin | GPIO_E7_Pin, GPIO_PIN_RESET);
 
-	// GPIOA параллельный интерфейс
+	//GPIOA параллельный интерфейс
 	GPIO_InitStruct.Pin = GPIO_A0_Pin | GPIO_A1_Pin | GPIO_A2_Pin | GPIO_A3_Pin
 			| GPIO_A4_Pin | GPIO_A5_Pin | GPIO_A6_Pin | GPIO_A7_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -391,7 +400,7 @@ static void MX_GPIO_Init(void) {
 			GPIO_A0_Pin | GPIO_A1_Pin | GPIO_A2_Pin | GPIO_A3_Pin | GPIO_A4_Pin
 					| GPIO_A5_Pin | GPIO_A6_Pin | GPIO_A7_Pin, GPIO_PIN_RESET);
 
-	// GPIOС параллельный интерфейс
+	//GPIOС параллельный интерфейс
 	GPIO_InitStruct.Pin = GPIO_C0_Pin | GPIO_C1_Pin | GPIO_C2_Pin | GPIO_C3_Pin
 			| GPIO_C4_Pin | GPIO_C5_Pin | GPIO_C6_Pin | GPIO_C7_Pin;
 	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
@@ -405,7 +414,8 @@ static void MX_GPIO_Init(void) {
 }
 
 /* USER CODE BEGIN 4 */
-
+//функция обновления конфигурации параллельных интерфейсов GPIO,
+//вызывается каждый раз после обновления управляющего регистра оператором mtemu
 void UpdateGPIODirection(void) {
 	GPIO_InitTypeDef GPIO_InitStruct = { 0 };
 
@@ -459,6 +469,8 @@ void UpdateGPIODirection(void) {
 
 }
 
+//функция получения места назначения посылки эмулятора
+//место назначения - последовательные и параллельные интерфейса, а также регистр управления
 AVAILABLE_DESTINATIONS GetDestinationByPort(const uint8_t port) {
 	switch (port) {
 	case 1:
@@ -490,6 +502,7 @@ AVAILABLE_DESTINATIONS GetDestinationByPort(const uint8_t port) {
 	return INTERFACE_UNKNOWN;
 }
 
+//функция отправки данных, пришедших из эмулятора, в место назначения
 void SendRequestToDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 		uint8_t data) {
 	switch (dest) {
@@ -498,7 +511,7 @@ void SendRequestToDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 		FIRST_ROW_LCD = "MT->UART";
 		sprintf(SECOND_ROW_LCD, "0x%x", data);
 
-		HAL_UART_Transmit(&huart1, &data, 1, HAL_MAX_DELAY);
+		HAL_UART_Transmit(&huart1, &data, 1, 4000);
 
 		// Прервать асинхронных прием данных, так как была дана команда на новую отправку посылки
 		if (HAL_UART_GetState(&huart1) == HAL_UART_STATE_BUSY_RX) {
@@ -540,7 +553,7 @@ void SendRequestToDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 			HAL_GPIO_WritePin(not_SS7_GPIO_Port, not_SS7_Pin, GPIO_PIN_RESET);
 			break;
 		}
-		HAL_SPI_Transmit(&hspi1, &data, 1, HAL_MAX_DELAY);
+		HAL_SPI_Transmit(&hspi1, &data, 1, 4000);
 		break;
 	case INTERFACE_I2C:
 		sprintf(FIRST_ROW_LCD, "%s(%d)", "MT->I2C",
@@ -548,8 +561,7 @@ void SendRequestToDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 		sprintf(SECOND_ROW_LCD, "0x%x", data);
 
 		HAL_I2C_Master_Transmit(&hi2c1, (address % I2C_MAX_DEVICES) << 1, &data,
-				1,
-				HAL_MAX_DELAY);
+				1, 4000);
 		break;
 	case INTERFACE_GPIOA:
 		FIRST_ROW_LCD = "MT->GPIOA";
@@ -623,6 +635,7 @@ void SendRequestToDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 	}
 }
 
+//функция чтения данных из места назначения для передачи в эмулятор
 void GetResponseFromDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 		uint8_t *answer) {
 	uint8_t error_code;
@@ -634,7 +647,7 @@ void GetResponseFromDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 
 			HAL_UART_Receive(&huart1, &UART_INTERFACE_RESPONSE[0],
 					sizeof(UART_INTERFACE_RESPONSE[0]),
-					HAL_MAX_DELAY);
+					4000);
 		}
 
 		error_code = HAL_UART_GetError(&huart1);
@@ -655,7 +668,7 @@ void GetResponseFromDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 		HAL_SPI_Receive(&hspi1,
 				&SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES],
 				sizeof(SPI_INTERFACE_RESPONSE[address % SPI_MAX_DEVICES]),
-				HAL_MAX_DELAY);
+				4000);
 
 		error_code = HAL_SPI_GetError(&hspi1);
 
@@ -700,7 +713,7 @@ void GetResponseFromDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 		HAL_I2C_Master_Receive(&hi2c1, (address % I2C_MAX_DEVICES) << 1,
 				&I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES],
 				sizeof(I2C_INTERFACE_RESPONSE[address % I2C_MAX_DEVICES]),
-				HAL_MAX_DELAY);
+				4000);
 
 		error_code = HAL_I2C_GetError(&hi2c1);
 
@@ -790,17 +803,16 @@ void GetResponseFromDestination(AVAILABLE_DESTINATIONS dest, uint8_t address,
 
 }
 
-// Соединение с мтему
+//функция установки соединение с мтему
 void MtemuConnection() {
 
 	uint8_t MTEMU_RESPONSE[18] = { "\x10TMWlcmToClbBddEP\x90" };
 
-	HAL_UART_Transmit(&huart2, MTEMU_RESPONSE, sizeof(MTEMU_RESPONSE),
-	HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, MTEMU_RESPONSE, sizeof(MTEMU_RESPONSE), 4000);
 	HAL_UART_Receive_IT(&huart2, MTEMU_REQUEST, sizeof(MTEMU_REQUEST));
 }
 
-// Мтему хочет, чтобы мы ему выдали данные
+//функция обработки запроса эмулятора на получение данных
 void SendMtemuResponse() {
 	uint8_t MTEMU_RESPONSE[4] = { 2, MTEMU_REQUEST[1], '\x44', '\x82' };
 
@@ -815,12 +827,11 @@ void SendMtemuResponse() {
 		// Ошибка - нераспознанный интерфейс
 	}
 
-	HAL_UART_Transmit(&huart2, MTEMU_RESPONSE, sizeof(MTEMU_RESPONSE),
-	HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, MTEMU_RESPONSE, sizeof(MTEMU_RESPONSE), 4000);
 	HAL_UART_Receive_IT(&huart2, MTEMU_REQUEST, sizeof(MTEMU_REQUEST));
 }
 
-// Мтему хочет отослать нам данные
+//функция обработки пришедших данных от эмулятора
 void GetMtemuRequest() {
 	// 4 старших бита - адрес девайса на интерфейса, 4 младших бита - интерфейс
 	AVAILABLE_DESTINATIONS dest = GetDestinationByPort(
@@ -835,11 +846,11 @@ void GetMtemuRequest() {
 
 	uint8_t MTEMU_RESPONSE[2] = { '\x00', '\x80' };
 
-	HAL_UART_Transmit(&huart2, MTEMU_RESPONSE, sizeof(MTEMU_RESPONSE),
-	HAL_MAX_DELAY);
+	HAL_UART_Transmit(&huart2, MTEMU_RESPONSE, sizeof(MTEMU_RESPONSE), 4000);
 	HAL_UART_Receive_IT(&huart2, MTEMU_REQUEST, sizeof(MTEMU_REQUEST));
 }
 
+//хэндлер получения пакета от эмулятора
 void MtemuUartHandler() {
 	if (MTEMU_REQUEST[0] == 98 && MTEMU_REQUEST[1] == 0 && MTEMU_REQUEST[2] == 0
 			&& MTEMU_REQUEST[3] == 226) {
@@ -858,6 +869,7 @@ void MtemuUartHandler() {
 
 }
 
+//коллбэк асинхронного окончания приема интерфейсами UART
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
 	if (huart == &huart2) {
 		MtemuUartHandler();
